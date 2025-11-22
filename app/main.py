@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from app.routers.organizations import router as org_router
 from app.routers.employees import router as emp_router
+from app.routers.assignments import router as assign_router
 
 app = FastAPI()
 
@@ -10,3 +11,4 @@ def root():
 
 app.include_router(org_router)
 app.include_router(emp_router)
+app.include_router(assign_router)
