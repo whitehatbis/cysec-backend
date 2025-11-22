@@ -4,6 +4,8 @@ from app.routers.employees import router as emp_router
 from app.routers.assignments import router as assign_router
 from app.routers.trainings import router as training_router
 from app.routers.progress import router as progress_router
+from app.routers.training_progress import router as progress_update_router
+app.include_router(progress_update_router)
 
 
 
@@ -18,3 +20,4 @@ app.include_router(emp_router)
 app.include_router(assign_router)
 app.include_router(training_router)
 app.include_router(progress_router)
+app.include_router(progress_update_router)
