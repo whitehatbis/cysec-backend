@@ -14,14 +14,11 @@ class OrganizationRequest(BaseModel):
     org_name: str
     admin_email: str
 
-
-# ✅ 1️⃣ Create Organization + Admin
+# ✅ CREATE ORGANIZATION
 @router.post("/organizations")
 def create_organization(req: OrganizationRequest):
-    # Create organization
     org = supabase.table("organizations").insert({
-        "name": req.org_name,
-        "status": "active"
+        "name": req.org_name
     }).execute()
 
     if not org.data:
@@ -29,43 +26,46 @@ def create_organization(req: OrganizationRequest):
 
     org_id = org.data[0]["id"]
 
-    # Create admin
     admin = supabase.table("org_admins").insert({
         "org_id": org_id,
         "email": req.admin_email,
-        "role": "admin"
+        "role": "admin",
+        "status": "active"
     }).execute()
 
-    if not admin.data:
-        raise HTTPException(status_code=500, detail="Failed to create admin")
+    return {"message": "Organization created successfully", "org_id": org_id}
 
-    return {
-        "message": "Organization created successfully",
-        "org_id": org_id
-    }
+# ✅ LIST ALL ORGANIZATIONS
+@router.get("/organizations")
+def list_organizations():
+    orgs = supabase.table("organizations").select("*").execute()
+    return orgs.data
 
-
-# ✅ 2️⃣ Disable Organization (Suspend Access)
-@router.patch("/organizations/{org_id}/disable")
-def disable_organization(org_id: str):
-    result = supabase.table("organizations").update({
-        "status": "inactive"
-    }).eq("id", org_id).execute()
-
-    if not result.data:
+# ✅ GET SINGLE ORG + STATUS
+@router.get("/organizations/{org_id}")
+def get_organization(org_id: str):
+    org = supabase.table("organizations").select("*").eq("id", org_id).execute()
+    if not org.data:
         raise HTTPException(status_code=404, detail="Organization not found")
+    return org.data[0]
+
+# ✅ DISABLE ORG + USERS
+@router.post("/organizations/{org_id}/disable")
+def disable_organization(org_id: str):
+    # Update org status
+    supabase.table("organizations").update({"status": "inactive"}).eq("id", org_id).execute()
+    # Update employees
+    supabase.table("employees").update({"status": "inactive"}).eq("org_id", org_id).execute()
+    # Update admins
+    supabase.table("org_admins").update({"status": "inactive"}).eq("org_id", org_id).execute()
 
     return {"message": "Organization disabled successfully"}
 
-
-# ✅ 3️⃣ Enable Organization (Restore Access)
-@router.patch("/organizations/{org_id}/enable")
+# ✅ ENABLE ORG + USERS
+@router.post("/organizations/{org_id}/enable")
 def enable_organization(org_id: str):
-    result = supabase.table("organizations").update({
-        "status": "active"
-    }).eq("id", org_id).execute()
-
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    supabase.table("organizations").update({"status": "active"}).eq("id", org_id).execute()
+    supabase.table("employees").update({"status": "active"}).eq("org_id", org_id).execute()
+    supabase.table("org_admins").update({"status": "active"}).eq("org_id", org_id).execute()
 
     return {"message": "Organization enabled successfully"}
