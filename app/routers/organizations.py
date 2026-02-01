@@ -81,3 +81,15 @@ def enable_organization(org_id: str):
     supabase.table("org_admins").update({"status": "active"}).eq("org_id", org_id).execute()
 
     return {"message": "Organization enabled successfully"}
+# ✅ UPDATE FEATURE FLAGS FOR ORG
+@router.post("/organizations/{org_id}/features")
+def update_org_features(org_id: str, training_enabled: bool, phishing_enabled: bool):
+    update = supabase.table("organizations").update({
+        "training_enabled": training_enabled,
+        "phishing_enabled": phishing_enabled
+    }).eq("id", org_id).execute()
+
+    if not update.data:
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    return {"message": "Feature flags updated successfully"}
