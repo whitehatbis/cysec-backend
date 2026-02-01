@@ -10,15 +10,23 @@ SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
+
+# ✅ UPDATED REQUEST MODEL
 class OrganizationRequest(BaseModel):
     org_name: str
     admin_email: str
+    training_enabled: bool = True
+    phishing_enabled: bool = True
+
 
 # ✅ CREATE ORGANIZATION
 @router.post("/organizations")
 def create_organization(req: OrganizationRequest):
     org = supabase.table("organizations").insert({
-        "name": req.org_name
+        "name": req.org_name,
+        "training_enabled": req.training_enabled,
+        "phishing_enabled": req.phishing_enabled,
+        "status": "active"
     }).execute()
 
     if not org.data:
@@ -26,20 +34,25 @@ def create_organization(req: OrganizationRequest):
 
     org_id = org.data[0]["id"]
 
-    admin = supabase.table("org_admins").insert({
+    supabase.table("org_admins").insert({
         "org_id": org_id,
         "email": req.admin_email,
         "role": "admin",
         "status": "active"
     }).execute()
 
-    return {"message": "Organization created successfully", "org_id": org_id}
+    return {
+        "message": "Organization created successfully",
+        "org_id": org_id
+    }
+
 
 # ✅ LIST ALL ORGANIZATIONS
 @router.get("/organizations")
 def list_organizations():
     orgs = supabase.table("organizations").select("*").execute()
     return orgs.data
+
 
 # ✅ GET SINGLE ORG + STATUS
 @router.get("/organizations/{org_id}")
@@ -49,17 +62,16 @@ def get_organization(org_id: str):
         raise HTTPException(status_code=404, detail="Organization not found")
     return org.data[0]
 
+
 # ✅ DISABLE ORG + USERS
 @router.post("/organizations/{org_id}/disable")
 def disable_organization(org_id: str):
-    # Update org status
     supabase.table("organizations").update({"status": "inactive"}).eq("id", org_id).execute()
-    # Update employees
     supabase.table("employees").update({"status": "inactive"}).eq("org_id", org_id).execute()
-    # Update admins
     supabase.table("org_admins").update({"status": "inactive"}).eq("org_id", org_id).execute()
 
     return {"message": "Organization disabled successfully"}
+
 
 # ✅ ENABLE ORG + USERS
 @router.post("/organizations/{org_id}/enable")
