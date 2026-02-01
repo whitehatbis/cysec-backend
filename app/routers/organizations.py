@@ -11,12 +11,17 @@ SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 
-# ✅ UPDATED REQUEST MODEL
+# ✅ REQUEST MODELS
 class OrganizationRequest(BaseModel):
     org_name: str
     admin_email: str
     training_enabled: bool = True
     phishing_enabled: bool = True
+
+
+class FeatureUpdateRequest(BaseModel):
+    training_enabled: bool
+    phishing_enabled: bool
 
 
 # ✅ CREATE ORGANIZATION
@@ -81,12 +86,14 @@ def enable_organization(org_id: str):
     supabase.table("org_admins").update({"status": "active"}).eq("org_id", org_id).execute()
 
     return {"message": "Organization enabled successfully"}
-# ✅ UPDATE FEATURE FLAGS FOR ORG
+
+
+# ✅ UPDATE FEATURE FLAGS FOR ORG (FIXED)
 @router.post("/organizations/{org_id}/features")
-def update_org_features(org_id: str, training_enabled: bool, phishing_enabled: bool):
+def update_org_features(org_id: str, req: FeatureUpdateRequest):
     update = supabase.table("organizations").update({
-        "training_enabled": training_enabled,
-        "phishing_enabled": phishing_enabled
+        "training_enabled": req.training_enabled,
+        "phishing_enabled": req.phishing_enabled
     }).eq("id", org_id).execute()
 
     if not update.data:
