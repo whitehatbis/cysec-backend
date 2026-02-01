@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 import os
 from supabase import create_client
@@ -16,6 +16,7 @@ class EmployeeRequest(BaseModel):
     email: str
     department: str | None = None
 
+
 @router.post("/employees")
 def add_employee(req: EmployeeRequest):
     emp = supabase.table("employees").insert({
@@ -32,3 +33,14 @@ def add_employee(req: EmployeeRequest):
         "message": "Employee added successfully",
         "employee_id": emp.data[0]["id"]
     }
+
+
+# ✅ NEW ENDPOINT
+@router.get("/employees")
+def list_employees(org_id: str = Query(...)):
+    employees = supabase.table("employees") \
+        .select("*") \
+        .eq("org_id", org_id) \
+        .execute()
+
+    return employees.data
