@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.routers.organizations import router as org_router
 from app.routers.employees import router as emp_router
 from app.routers.assignments import router as assign_router
@@ -8,9 +10,19 @@ from app.routers.training_progress import router as progress_update_router
 from app.routers.google_sync import router as google_sync_router
 from app.routers.phishing import router as phishing_router
 
-
-
 app = FastAPI()
+
+# ✅ ADD THIS BLOCK
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://admin.cysecguardians.in",
+        "https://app.cysecguardians.in",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
