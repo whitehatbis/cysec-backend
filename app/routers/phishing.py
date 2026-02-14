@@ -5,102 +5,132 @@ import requests
 router = APIRouter(prefix="/phishing", tags=["Phishing"])
 
 GOPHISH_API_KEY = os.getenv("GOPHISH_API_KEY")
-GOPHISH_API_URL = os.getenv("GOPHISH_API_URL")  # e.g. https://XX.XX.XX.XX:3333
+GOPHISH_API_URL = os.getenv("GOPHISH_API_URL")
 
 if not GOPHISH_API_KEY or not GOPHISH_API_URL:
     raise Exception("GoPhish API environment variables missing!")
 
+HEADERS = {
+    "Authorization": f"Bearer {GOPHISH_API_KEY}",
+    "Content-Type": "application/json"
+}
 
-# -----------------------------------------------
-# Helper Function: Make requests to GoPhish API
-# -----------------------------------------------
+# ===============================================
+# TEMPLATE MAP (YOUR REAL IDs)
+# ===============================================
+
+TEMPLATE_MAP = {
+    "invoice_template": 1,
+    "login_template": 2,
+    "hr_template": 3,
+    "high_risk_template": 2,
+    "medium_risk_template": 1,
+    "basic_template": 1
+}
+
+# ===============================================
+# HELPER
+# ===============================================
+
 def gophish_request(method, endpoint, data=None):
-    url = f"{GOPHISH_API_URL}/api/{endpoint}?api_key={GOPHISH_API_KEY}"
+
+    url = f"{GOPHISH_API_URL}/api/{endpoint}"
 
     try:
+
         if method == "GET":
-            response = requests.get(url, verify=False)
+            r = requests.get(
+                url,
+                headers=HEADERS,
+                verify=False
+            )
+
         elif method == "POST":
-            response = requests.post(url, json=data, verify=False)
+            r = requests.post(
+                url,
+                headers=HEADERS,
+                json=data,
+                verify=False
+            )
+
         else:
             raise HTTPException(400, "Unsupported method")
 
-        if response.status_code >= 400:
-            raise HTTPException(response.status_code, response.text)
+        if r.status_code >= 400:
+            raise HTTPException(r.status_code, r.text)
 
-        return response.json()
+        return r.json()
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(500, str(e))
 
 
-# -----------------------------------------------
-# Create Email Template
-# -----------------------------------------------
-@router.post("/template")
-def create_template(name: str, subject: str, html: str):
-    data = {
-        "name": name,
-        "subject": subject,
-        "html": html
-    }
+# ===============================================
+# CREATE GROUP (optional)
+# ===============================================
 
-    return gophish_request("POST", "templates/", data)
-
-
-# -----------------------------------------------
-# Create Target Group
-# -----------------------------------------------
 @router.post("/group")
 def create_group(name: str, emails: list):
+
     data = {
         "name": name,
-        "targets": [{"email": email} for email in emails]
+        "targets": [{"email": e} for e in emails]
     }
 
     return gophish_request("POST", "groups/", data)
 
 
-# -----------------------------------------------
-# Create Landing Page
-# -----------------------------------------------
-@router.post("/landing")
-def create_landing_page(name: str, html: str):
-    data = {
-        "name": name,
-        "html": html
-    }
+# ===============================================
+# LAUNCH CAMPAIGN (MAIN ENDPOINT)
+# ===============================================
 
-    return gophish_request("POST", "pages/", data)
-
-
-# -----------------------------------------------
-# Launch Phishing Campaign
-# -----------------------------------------------
 @router.post("/campaign")
-def launch_campaign(name: str, template_id: int, group_id: int, url: str, launch_date: str = None):
+def launch_campaign(payload: dict):
+
+    """
+    Accepts wizard campaignDraft directly.
+    """
+
+    template_key = payload.get("template")
+    template_id = TEMPLATE_MAP.get(template_key)
+
+    if not template_id:
+        raise HTTPException(400, "Unknown template")
+
+    # MVP hardcoded values
+    # (replace later with dynamic values)
+    page_id = 1
+    smtp_id = 1
+    group_id = 1
+
     data = {
-        "name": name,
+        "name": f"CySec Campaign - {payload.get('goal','test')}",
+
         "template": {"id": template_id},
+        "page": {"id": page_id},
+        "smtp": {"id": smtp_id},
         "groups": [{"id": group_id}],
-        "url": url,
-        "launch_date": launch_date  # Optional scheduling
+
+        "launch_date": None,
+        "url": payload.get("url", "")
     }
 
     return gophish_request("POST", "campaigns/", data)
 
 
-# -----------------------------------------------
-# Get All Campaigns
-# -----------------------------------------------
+# ===============================================
+# GET CAMPAIGNS
+# ===============================================
+
 @router.get("/campaigns")
 def get_campaigns():
     return gophish_request("GET", "campaigns/")
 
 
-# -----------------------------------------------
-# Get Results of Campaign
-# -----------------------------------------------
+# ===============================================
+# RESULTS
+# ===============================================
+
 @router.get("/campaign/{campaign_id}/results")
 def get_campaign_results(campaign_id: int):
     return gophish_request("GET", f"campaigns/{campaign_id}")
