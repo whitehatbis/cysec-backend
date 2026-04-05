@@ -1,23 +1,33 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 import os
 import requests
+from supabase import create_client
 
 router = APIRouter(prefix="/phishing", tags=["Phishing"])
+
+# ===============================
+# ENV
+# ===============================
 
 GOPHISH_API_KEY = os.getenv("GOPHISH_API_KEY")
 GOPHISH_API_URL = os.getenv("GOPHISH_API_URL")
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+
 if not GOPHISH_API_KEY or not GOPHISH_API_URL:
     raise Exception("GoPhish API environment variables missing!")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 
 HEADERS = {
     "Authorization": f"Bearer {GOPHISH_API_KEY}",
     "Content-Type": "application/json"
 }
 
-# ===============================================
-# TEMPLATE MAP (YOUR REAL IDs)
-# ===============================================
+# ===============================
+# TEMPLATE MAP
+# ===============================
 
 TEMPLATE_MAP = {
     "invoice_template": 1,
@@ -28,30 +38,20 @@ TEMPLATE_MAP = {
     "basic_template": 1
 }
 
-# ===============================================
+# ===============================
 # HELPER
-# ===============================================
+# ===============================
 
 def gophish_request(method, endpoint, data=None):
 
     url = f"{GOPHISH_API_URL}/api/{endpoint}"
 
     try:
-
         if method == "GET":
-            r = requests.get(
-                url,
-                headers=HEADERS,
-                verify=False
-            )
+            r = requests.get(url, headers=HEADERS, verify=False)
 
         elif method == "POST":
-            r = requests.post(
-                url,
-                headers=HEADERS,
-                json=data,
-                verify=False
-            )
+            r = requests.post(url, headers=HEADERS, json=data, verify=False)
 
         else:
             raise HTTPException(400, "Unsupported method")
@@ -64,10 +64,9 @@ def gophish_request(method, endpoint, data=None):
     except requests.exceptions.RequestException as e:
         raise HTTPException(500, str(e))
 
-
-# ===============================================
-# CREATE GROUP (optional)
-# ===============================================
+# ===============================
+# CREATE GROUP (OPTIONAL)
+# ===============================
 
 @router.post("/group")
 def create_group(name: str, emails: list):
@@ -79,17 +78,12 @@ def create_group(name: str, emails: list):
 
     return gophish_request("POST", "groups/", data)
 
-
-# ===============================================
-# LAUNCH CAMPAIGN (MAIN ENDPOINT)
-# ===============================================
+# ===============================
+# LAUNCH CAMPAIGN
+# ===============================
 
 @router.post("/campaign")
 def launch_campaign(payload: dict):
-
-    """
-    Accepts wizard campaignDraft directly.
-    """
 
     template_key = payload.get("template")
     template_id = TEMPLATE_MAP.get(template_key)
@@ -97,39 +91,91 @@ def launch_campaign(payload: dict):
     if not template_id:
         raise HTTPException(400, "Unknown template")
 
-    # MVP hardcoded values
-    # (replace later with dynamic values)
+    org_id = payload.get("org_id")
+    created_by = payload.get("created_by")
+
+    if not org_id:
+        raise HTTPException(400, "Missing org_id")
+
+    # MVP static config
     page_id = 1
     smtp_id = 1
     group_id = 1
 
     data = {
         "name": f"CySec Campaign - {payload.get('goal','test')}",
-
         "template": {"id": template_id},
         "page": {"id": page_id},
         "smtp": {"id": smtp_id},
         "groups": [{"id": group_id}],
-
         "launch_date": None,
         "url": payload.get("url", "")
     }
 
-    return gophish_request("POST", "campaigns/", data)
+    # 🔥 Create campaign in GoPhish
+    result = gophish_request("POST", "campaigns/", data)
 
+    # 🔥 Save in Supabase
+    supabase.table("phishing_campaigns").insert({
+        "org_id": org_id,
+        "created_by": created_by,
+        "gophish_campaign_id": result.get("id"),
+        "name": result.get("name"),
+        "status": result.get("status"),
+        "scheduled_at": result.get("launch_date")
+    }).execute()
 
-# ===============================================
-# GET CAMPAIGNS
-# ===============================================
+    return result
+
+# ===============================
+# GET CAMPAIGNS (ORG BASED)
+# ===============================
 
 @router.get("/campaigns")
-def get_campaigns():
-    return gophish_request("GET", "campaigns/")
+def get_campaigns(org_id: str = Query(...)):
 
+    campaigns = supabase.table("phishing_campaigns") \
+        .select("*") \
+        .eq("org_id", org_id) \
+        .execute()
 
-# ===============================================
-# RESULTS
-# ===============================================
+    return campaigns.data
+
+# ===============================
+# SYNC CAMPAIGN EVENTS
+# ===============================
+
+@router.post("/sync/{campaign_id}")
+def sync_campaign(campaign_id: int):
+
+    result = gophish_request("GET", f"campaigns/{campaign_id}")
+
+    events = result.get("results", [])
+
+    for e in events:
+
+        # 🔥 Map email → employee_id
+        employee = supabase.table("employees") \
+            .select("id") \
+            .eq("email", e.get("email")) \
+            .single() \
+            .execute()
+
+        employee_id = employee.data["id"] if employee.data else None
+
+        supabase.table("phishing_events").insert({
+            "campaign_id": campaign_id,
+            "employee_id": employee_id,
+            "target_email": e.get("email"),
+            "gophish_event_type": e.get("status"),
+            "occurred_at": e.get("last_event")
+        }).execute()
+
+    return {"status": "synced"}
+
+# ===============================
+# GET CAMPAIGN RESULTS
+# ===============================
 
 @router.get("/campaign/{campaign_id}/results")
 def get_campaign_results(campaign_id: int):
