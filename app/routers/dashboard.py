@@ -13,18 +13,25 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 @router.get("/dashboard/summary")
 def dashboard_summary(org_id: str = Query(...)):
 
-    users = supabase.table("employees") \
+    # Get employees
+    employees = supabase.table("employees") \
         .select("*") \
         .eq("org_id", org_id) \
         .execute()
 
-    total_users = len(users.data or [])
+    users = employees.data or []
+    total_users = len(users)
 
-    # Temporary mock logic
-    compliant_users = int(total_users * 0.6)
-    pending_training = total_users - compliant_users
-    failed_phishing = int(total_users * 0.3)
-    awareness_score = 70
+    # 🔥 REAL LOGIC (no fake %)
+    # For now:
+    compliant_users = 0
+    pending_training = total_users
+    failed_phishing = 0
+    awareness_score = 0
+
+    # Optional: basic awareness logic
+    if total_users > 0:
+        awareness_score = int((compliant_users / total_users) * 100)
 
     return {
         "total_users": total_users,
