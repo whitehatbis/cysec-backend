@@ -64,8 +64,14 @@ def dashboard_summary(org_id: str = Query(...)):
     # =============================
     # AWARENESS SCORE
     # =============================
-    awareness_score = 0
-    if total_users > 0:
+    if total_users == 0:
+        awareness_score = 0
+
+    elif len(phishing_data) == 0:
+    # No phishing data yet → neutral score
+        awareness_score = 50
+
+    else:
         safe_users = total_users - failed_phishing
         awareness_score = int((safe_users / total_users) * 100)
 
