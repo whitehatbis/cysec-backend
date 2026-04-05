@@ -13,26 +13,65 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SECRET_KEY)
 @router.get("/dashboard/summary")
 def dashboard_summary(org_id: str = Query(...)):
 
-    # Get employees
+    # =============================
+    # TOTAL USERS
+    # =============================
     employees = supabase.table("employees") \
-        .select("*") \
+        .select("id") \
         .eq("org_id", org_id) \
         .execute()
 
     users = employees.data or []
     total_users = len(users)
 
-    # 🔥 REAL LOGIC (no fake %)
-    # For now:
-    compliant_users = 0
-    pending_training = total_users
-    failed_phishing = 0
+    employee_ids = [u["id"] for u in users]
+
+    # =============================
+    # TRAINING DATA
+    # =============================
+    progress = supabase.table("training_progress") \
+        .select("employee_id, status") \
+        .in_("employee_id", employee_ids) \
+        .execute()
+
+    progress_data = progress.data or []
+
+    completed_users = set(
+        p["employee_id"] for p in progress_data
+        if p["status"] == "completed"
+    )
+
+    compliant_users = len(completed_users)
+    pending_training = total_users - compliant_users
+
+    # =============================
+    # PHISHING DATA
+    # =============================
+    phishing = supabase.table("phishing_events") \
+        .select("employee_id, gophish_event_type") \
+        .in_("employee_id", employee_ids) \
+        .execute()
+
+    phishing_data = phishing.data or []
+
+    failed_users = set(
+        p["employee_id"] for p in phishing_data
+        if p["gophish_event_type"] == "Clicked Link"
+    )
+
+    failed_phishing = len(failed_users)
+
+    # =============================
+    # AWARENESS SCORE
+    # =============================
     awareness_score = 0
-
-    # Optional: basic awareness logic
     if total_users > 0:
-        awareness_score = int((compliant_users / total_users) * 100)
+        safe_users = total_users - failed_phishing
+        awareness_score = int((safe_users / total_users) * 100)
 
+    # =============================
+    # RESPONSE
+    # =============================
     return {
         "total_users": total_users,
         "compliant_users": compliant_users,
