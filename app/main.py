@@ -10,7 +10,7 @@ from app.routers.training_progress import router as progress_update_router
 from app.routers.google_sync import router as google_sync_router
 from app.routers.phishing import router as phishing_router
 from app.routers.auth import router as auth_router
-from dashboard import router as dashboard_router
+from app.routers.dashboard import router as dashboard_router
 
 app = FastAPI()
 
