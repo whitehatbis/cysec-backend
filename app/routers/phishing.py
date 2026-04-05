@@ -65,7 +65,7 @@ def gophish_request(method, endpoint, data=None):
         raise HTTPException(500, str(e))
 
 # ===============================
-# CREATE GROUP (OPTIONAL)
+# CREATE GROUP
 # ===============================
 
 @router.post("/group")
@@ -115,20 +115,28 @@ def launch_campaign(payload: dict):
     # 🔥 Create campaign in GoPhish
     result = gophish_request("POST", "campaigns/", data)
 
+    campaign_id = result.get("id")
+
     # 🔥 Save in Supabase
     supabase.table("phishing_campaigns").insert({
         "org_id": org_id,
         "created_by": created_by,
-        "gophish_campaign_id": result.get("id"),
+        "gophish_campaign_id": campaign_id,
         "name": result.get("name"),
         "status": result.get("status"),
         "scheduled_at": result.get("launch_date")
     }).execute()
 
+    # 🔥 AUTO SYNC immediately
+    try:
+        sync_campaign(campaign_id)
+    except Exception as e:
+        print("Initial sync failed:", str(e))
+
     return result
 
 # ===============================
-# GET CAMPAIGNS (ORG BASED)
+# GET CAMPAIGNS
 # ===============================
 
 @router.get("/campaigns")
@@ -149,26 +157,38 @@ def get_campaigns(org_id: str = Query(...)):
 def sync_campaign(campaign_id: int):
 
     result = gophish_request("GET", f"campaigns/{campaign_id}")
-
     events = result.get("results", [])
 
     for e in events:
 
+        email = e.get("email")
+        occurred_at = e.get("last_event")
+
+        # 🔥 Prevent duplicates
+        existing = supabase.table("phishing_events") \
+            .select("id") \
+            .eq("campaign_id", campaign_id) \
+            .eq("target_email", email) \
+            .eq("occurred_at", occurred_at) \
+            .execute()
+
+        if existing.data:
+            continue
+
         # 🔥 Map email → employee_id
         employee = supabase.table("employees") \
             .select("id") \
-            .eq("email", e.get("email")) \
-            .single() \
+            .eq("email", email) \
             .execute()
 
-        employee_id = employee.data["id"] if employee.data else None
+        employee_id = employee.data[0]["id"] if employee.data else None
 
         supabase.table("phishing_events").insert({
             "campaign_id": campaign_id,
             "employee_id": employee_id,
-            "target_email": e.get("email"),
+            "target_email": email,
             "gophish_event_type": e.get("status"),
-            "occurred_at": e.get("last_event")
+            "occurred_at": occurred_at
         }).execute()
 
     return {"status": "synced"}
@@ -180,3 +200,36 @@ def sync_campaign(campaign_id: int):
 @router.get("/campaign/{campaign_id}/results")
 def get_campaign_results(campaign_id: int):
     return gophish_request("GET", f"campaigns/{campaign_id}")
+
+# ===============================
+# AUTO SYNC ALL CAMPAIGNS
+# ===============================
+
+@router.get("/auto-sync")
+def auto_sync():
+
+    campaigns = supabase.table("phishing_campaigns") \
+        .select("gophish_campaign_id") \
+        .execute()
+
+    if not campaigns.data:
+        return {"status": "no campaigns"}
+
+    synced = 0
+
+    for c in campaigns.data:
+        campaign_id = c.get("gophish_campaign_id")
+
+        if not campaign_id:
+            continue
+
+        try:
+            sync_campaign(campaign_id)
+            synced += 1
+        except Exception as e:
+            print(f"Failed sync for {campaign_id}: {str(e)}")
+
+    return {
+        "status": "success",
+        "synced_campaigns": synced
+    }
