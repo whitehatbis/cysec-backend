@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import RedirectResponse
 from supabase import create_client
 import os
 import uuid
-import hashlib
 import sendgrid
 from sendgrid.helpers.mail import Mail
 
@@ -81,8 +81,8 @@ def send_campaign(campaign_id: str):
 
         rid = r["unique_id"]
 
-        tracking_link = f"{TRACKING_DOMAIN}/click?rid={rid}"
-        open_pixel = f"{TRACKING_DOMAIN}/open?rid={rid}"
+        tracking_link = f"{TRACKING_DOMAIN}/phishing/track/click?rid={rid}"
+        open_pixel = f"{TRACKING_DOMAIN}/phishing/track/open?rid={rid}"
 
         html = f"""
         <p>Hello {r.get('name','User')},</p>
@@ -115,7 +115,6 @@ def send_campaign(campaign_id: str):
         try:
             sg.send(message)
 
-            # log "sent"
             supabase.table("phishing_events").insert({
                 "campaign_id": campaign_id,
                 "recipient_email": r["email"],
@@ -135,10 +134,20 @@ def send_campaign(campaign_id: str):
 @router.get("/track/open")
 def track_open(rid: str):
 
-    supabase.table("phishing_events").insert({
-        "event_type": "open"
-    }).execute()
+    # find recipient
+    rec = supabase.table("phishing_recipients") \
+        .select("campaign_id,email") \
+        .eq("unique_id", rid) \
+        .execute()
 
+    if rec.data:
+        supabase.table("phishing_events").insert({
+            "campaign_id": rec.data[0]["campaign_id"],
+            "recipient_email": rec.data[0]["email"],
+            "event_type": "open"
+        }).execute()
+
+    # return 1x1 pixel response
     return {"status": "ok"}
 
 
@@ -149,10 +158,18 @@ def track_open(rid: str):
 @router.get("/track/click")
 def track_click(rid: str):
 
-    supabase.table("phishing_events").insert({
-        "event_type": "click"
-    }).execute()
+    rec = supabase.table("phishing_recipients") \
+        .select("campaign_id,email") \
+        .eq("unique_id", rid) \
+        .execute()
 
-    return {
-        "redirect": f"{LANDING_BASE}/password-reset?rid={rid}"
-    }
+    if rec.data:
+        supabase.table("phishing_events").insert({
+            "campaign_id": rec.data[0]["campaign_id"],
+            "recipient_email": rec.data[0]["email"],
+            "event_type": "click"
+        }).execute()
+
+    return RedirectResponse(
+        url=f"{LANDING_BASE}/password-reset?rid={rid}"
+    )
