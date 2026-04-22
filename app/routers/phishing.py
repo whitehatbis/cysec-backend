@@ -173,3 +173,21 @@ def track_click(rid: str):
     return RedirectResponse(
         url=f"{LANDING_BASE}/password-reset?rid={rid}"
     )
+# ===============================
+# TEST EMAIL
+# ===============================
+
+@router.get("/test-email")
+def test_email():
+    message = Mail(
+        from_email="support@cysecguardians.in",
+        to_emails="support@cysecguardians.in",
+        subject="CySec Test Email",
+        html_content="<p>SendGrid is working 🚀</p>"
+    )
+
+    try:
+        sg.send(message)
+        return {"status": "sent"}
+    except Exception as e:
+        return {"error": str(e)}
