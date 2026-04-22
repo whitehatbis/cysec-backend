@@ -100,7 +100,7 @@ def send_campaign(campaign_id: str):
         """
 
         message = Mail(
-            from_email="security@cysecguardians.in",
+            from_email="support@cysecguardians.in",
             to_emails=r["email"],
             subject="Action Required",
             html_content=html
