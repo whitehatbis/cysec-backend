@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from supabase import create_client
 import os
 import uuid
@@ -16,11 +16,33 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SECRET_KEY")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
+# TEMP: using Render domain (we will change later)
 TRACKING_DOMAIN = "https://cysec-backend.onrender.com"
+
 LANDING_BASE = "https://pages.cysecguardians.in"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
+
+# ===============================
+# TEST EMAIL
+# ===============================
+
+@router.get("/test-email")
+def test_email():
+    message = Mail(
+        from_email="support@cysecguardians.in",
+        to_emails="support@cysecguardians.in",
+        subject="CySec Test Email",
+        html_content="<p>SendGrid is working 🚀</p>"
+    )
+
+    try:
+        sg.send(message)
+        return {"status": "sent"}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 # ===============================
 # CREATE CAMPAIGN
@@ -128,13 +150,12 @@ def send_campaign(campaign_id: str):
 
 
 # ===============================
-# TRACK OPEN
+# TRACK OPEN (FIXED)
 # ===============================
 
 @router.get("/track/open")
 def track_open(rid: str):
 
-    # find recipient
     rec = supabase.table("phishing_recipients") \
         .select("campaign_id,email") \
         .eq("unique_id", rid) \
@@ -147,8 +168,10 @@ def track_open(rid: str):
             "event_type": "open"
         }).execute()
 
-    # return 1x1 pixel response
-    return {"status": "ok"}
+    # 1x1 transparent pixel
+    pixel = b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+
+    return Response(content=pixel, media_type="image/gif")
 
 
 # ===============================
@@ -173,21 +196,3 @@ def track_click(rid: str):
     return RedirectResponse(
         url=f"{LANDING_BASE}/password-reset?rid={rid}"
     )
-# ===============================
-# TEST EMAIL
-# ===============================
-
-@router.get("/test-email")
-def test_email():
-    message = Mail(
-        from_email="support@cysecguardians.in",
-        to_emails="support@cysecguardians.in",
-        subject="CySec Test Email",
-        html_content="<p>SendGrid is working 🚀</p>"
-    )
-
-    try:
-        sg.send(message)
-        return {"status": "sent"}
-    except Exception as e:
-        return {"error": str(e)}
