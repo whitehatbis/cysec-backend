@@ -5,6 +5,8 @@ import os
 import uuid
 import sendgrid
 from sendgrid.helpers.mail import Mail
+import hashlib
+from fastapi import Request
 
 router = APIRouter(prefix="/phishing", tags=["Phishing"])
 
@@ -196,3 +198,45 @@ def track_click(rid: str):
     return RedirectResponse(
     url=f"{LANDING_BASE}/password-reset.html?rid={rid}"
 )
+
+# ===============================
+# CAPTURE CREDENTIALS
+# ===============================
+
+@router.post("/submit")
+async def capture_credentials(request: Request):
+
+    data = await request.json()
+
+    rid = data.get("rid")
+    email = data.get("email")
+    password = data.get("password")
+
+    rec = supabase.table("phishing_recipients") \
+        .select("id,campaign_id,email") \
+        .eq("unique_id", rid) \
+        .execute()
+
+    if not rec.data:
+        return {"status": "invalid"}
+
+    recipient = rec.data[0]
+
+    # hash password (never store raw)
+    password_hash = hashlib.sha256(password.encode()).hexdigest()
+
+    # store credential
+    supabase.table("phishing_credentials").insert({
+        "recipient_id": recipient["id"],
+        "email_entered": email,
+        "password_hash": password_hash
+    }).execute()
+
+    # log event
+    supabase.table("phishing_events").insert({
+        "campaign_id": recipient["campaign_id"],
+        "recipient_email": recipient["email"],
+        "event_type": "submit"
+    }).execute()
+
+    return {"status": "captured"}
