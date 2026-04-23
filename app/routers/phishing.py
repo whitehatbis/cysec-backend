@@ -16,7 +16,7 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_SECRET_KEY")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
-TRACKING_DOMAIN = "https://track.cysecguardians.in"
+TRACKING_DOMAIN = "https://cysec-backend.onrender.com"
 LANDING_BASE = "https://pages.cysecguardians.in"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
