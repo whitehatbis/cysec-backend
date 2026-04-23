@@ -194,5 +194,5 @@ def track_click(rid: str):
         }).execute()
 
     return RedirectResponse(
-        url=f"{LANDING_BASE}/password-reset?rid={rid}"
-    )
+    url=f"{LANDING_BASE}/password-reset.html?rid={rid}"
+)
