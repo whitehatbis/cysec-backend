@@ -14,12 +14,13 @@ from app.routers.dashboard import router as dashboard_router
 
 app = FastAPI()
 
-# ✅ ADD THIS BLOCK
+# ✅ UPDATED CORS CONFIG (IMPORTANT)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://admin.cysecguardians.in",
         "https://app.cysecguardians.in",
+        "https://cysec-phishing-pages.pages.dev",  # 🔥 ADD THIS
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -30,6 +31,7 @@ app.add_middleware(
 def root():
     return {"message": "CySec Backend is running!"}
 
+# Routers
 app.include_router(org_router)
 app.include_router(emp_router)
 app.include_router(assign_router)
