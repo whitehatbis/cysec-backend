@@ -17,7 +17,7 @@ def dashboard_summary(org_id: str = Query(...)):
     # TOTAL USERS
     # =============================
     employees = supabase.table("employees") \
-        .select("id") \
+        .select("id,email") \
         .eq("org_id", org_id) \
         .execute()
 
@@ -25,6 +25,7 @@ def dashboard_summary(org_id: str = Query(...)):
     total_users = len(users)
 
     employee_ids = [u["id"] for u in users]
+    employee_emails = [u.get("email") for u in users if u.get("email")]
 
     # =============================
     # TRAINING DATA
@@ -47,17 +48,22 @@ def dashboard_summary(org_id: str = Query(...)):
     # =============================
     # PHISHING DATA
     # =============================
-    phishing = supabase.table("phishing_events") \
-        .select("employee_id, gophish_event_type") \
-        .in_("employee_id", employee_ids) \
-        .execute()
+    failed_users = set()
 
-    phishing_data = phishing.data or []
+    if employee_emails:
+        phishing = supabase.table("phishing_events") \
+            .select("recipient_email, event_type") \
+            .in_("recipient_email", employee_emails) \
+            .execute()
 
-    failed_users = set(
-        p["employee_id"] for p in phishing_data
-        if p["gophish_event_type"] == "Clicked Link"
-    )
+        phishing_data = phishing.data or []
+
+        failed_users = set(
+            p["recipient_email"] for p in phishing_data
+            if p.get("event_type") == "click"
+        )
+    else:
+        phishing_data = []
 
     failed_phishing = len(failed_users)
 
@@ -68,7 +74,7 @@ def dashboard_summary(org_id: str = Query(...)):
         awareness_score = 0
 
     elif len(phishing_data) == 0:
-    # No phishing data yet → neutral score
+        # No phishing data yet → neutral score
         awareness_score = 50
 
     else:
