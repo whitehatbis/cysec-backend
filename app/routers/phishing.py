@@ -21,7 +21,7 @@ SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 # TEMP: using Render domain (we will change later)
 TRACKING_DOMAIN = "https://cysec-backend.onrender.com"
 
-LANDING_BASE = "https://cysec-phishing-pages.pages.dev/"
+LANDING_BASE = "https://cysec-phishing-pages.pages.dev"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
