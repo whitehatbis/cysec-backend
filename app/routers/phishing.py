@@ -101,6 +101,17 @@ def send_campaign(campaign_id: str):
     if not recipients:
         raise HTTPException(400, "No recipients")
 
+    # 🔥 Get campaign template
+    campaign = supabase.table("phishing_campaigns") \
+        .select("template_id") \
+        .eq("id", campaign_id) \
+        .execute()
+
+    template_id = "default"
+
+    if campaign.data:
+        template_id = campaign.data[0].get("template_id", "default")
+
     for r in recipients:
 
         rid = r["unique_id"]
@@ -108,20 +119,57 @@ def send_campaign(campaign_id: str):
         tracking_link = f"{TRACKING_DOMAIN}/phishing/track/click?rid={rid}"
         open_pixel = f"{TRACKING_DOMAIN}/phishing/track/open?rid={rid}"
 
-        html = f"""
-        <p>Hello {r.get('name','User')},</p>
+        # ===============================
+        # TEMPLATE LOGIC
+        # ===============================
 
-        <p>We detected an issue that needs your attention.</p>
+        if template_id == "invoice_template":
+            html = f"""
+            <p>Hello {r.get('name','User')},</p>
 
-        <a href="{tracking_link}">Review Now</a>
+            <p>You have a pending invoice that requires immediate action.</p>
 
-        <img src="{open_pixel}" width="1" height="1" />
+            <a href="{tracking_link}">View Invoice</a>
 
-        <hr/>
-        <p style="font-size:12px;color:#888;">
-        This email is part of a cybersecurity awareness simulation.
-        </p>
-        """
+            <img src="{open_pixel}" width="1" height="1" />
+            """
+
+        elif template_id == "login_template":
+            html = f"""
+            <p>Hello {r.get('name','User')},</p>
+
+            <p>Your account requires verification.</p>
+
+            <a href="{tracking_link}">Verify Account</a>
+
+            <img src="{open_pixel}" width="1" height="1" />
+            """
+
+        elif template_id == "hr_template":
+            html = f"""
+            <p>Hello {r.get('name','User')},</p>
+
+            <p>Important HR policy update requires your acknowledgment.</p>
+
+            <a href="{tracking_link}">Review Policy</a>
+
+            <img src="{open_pixel}" width="1" height="1" />
+            """
+
+        else:
+            html = f"""
+            <p>Hello {r.get('name','User')},</p>
+
+            <p>Please review the following message.</p>
+
+            <a href="{tracking_link}">Open</a>
+
+            <img src="{open_pixel}" width="1" height="1" />
+            """
+
+        # ===============================
+        # SEND EMAIL
+        # ===============================
 
         message = Mail(
             from_email="support@cysecguardians.in",
@@ -141,7 +189,7 @@ def send_campaign(campaign_id: str):
 
             supabase.table("phishing_events").insert({
                 "campaign_id": campaign_id,
-                "recipient_email": r["email"],
+                "target_email": r["email"],
                 "event_type": "sent"
             }).execute()
 
