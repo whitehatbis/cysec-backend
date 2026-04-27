@@ -52,16 +52,24 @@ def test_email():
 
 @router.post("/campaign")
 def create_campaign(payload: dict):
+
     data = {
         "name": payload.get("name"),
         "template_id": payload.get("template_id"),
         "group_id": payload.get("group_id"),
-        "status": "draft"
+        "status": "draft",
+
+        # 🔥 REQUIRED FIELDS
+        "org_id": payload.get("org_id"),
+        "created_by": payload.get("created_by")
     }
 
     res = supabase.table("phishing_campaigns").insert(data).execute()
-    return res.data
 
+    if not res.data:
+        raise HTTPException(400, "Campaign creation failed")
+
+    return res.data
 
 # ===============================
 # ADD RECIPIENTS
