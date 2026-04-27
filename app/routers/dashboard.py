@@ -46,20 +46,20 @@ def dashboard_summary(org_id: str = Query(...)):
     pending_training = total_users - compliant_users
 
     # =============================
-    # PHISHING DATA
+    # PHISHING DATA (FIXED)
     # =============================
     failed_users = set()
 
     if employee_emails:
         phishing = supabase.table("phishing_events") \
-            .select("recipient_email, event_type") \
-            .in_("recipient_email", employee_emails) \
+            .select("target_email, event_type") \
+            .in_("target_email", employee_emails) \
             .execute()
 
         phishing_data = phishing.data or []
 
         failed_users = set(
-            p["recipient_email"] for p in phishing_data
+            p["target_email"] for p in phishing_data
             if p.get("event_type") == "click"
         )
     else:
@@ -74,7 +74,6 @@ def dashboard_summary(org_id: str = Query(...)):
         awareness_score = 0
 
     elif len(phishing_data) == 0:
-        # No phishing data yet → neutral score
         awareness_score = 50
 
     else:
